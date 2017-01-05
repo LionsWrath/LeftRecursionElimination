@@ -25,7 +25,6 @@
 
 //Grammar Related Sets
 char *lRules, **rRules;
-char *nlRules, **nrRules;
 size_t numRules = 0;
 
 char *ordering;
@@ -39,14 +38,6 @@ void allocDataset(size_t nlines, size_t nchar) {
     rRules = malloc(nlines * sizeof(char*));
     for (i=0; i<nlines; i++)
         rRules[i] = malloc(nchar * sizeof(char)); 
-}
-
-void allocRemoved(size_t nlines, size_t nchar) {
-    int i;
-    nlRules = malloc(nlines * sizeof(char));
-    nrRules = malloc(nlines * sizeof(char*));
-    for (i=0; i<nlines; i++)
-        nrRules[i] = malloc(nchar * sizeof(char)); 
 }
 
 void allocOrder(size_t nlines) {
@@ -162,10 +153,17 @@ void imediateRemoval() {
 }
 
 void globalRemoval() {
-    int i;
+    int i, j, rule;
 
     for (i=0; i<numNT; i++) {
-        // fase de substituição
+        for (j=0; j < i-1; j++) {
+            
+            // Verify matching rule
+            for (i=0; i<numRules; i++) {
+                if (lRules[i] == al && rRules[i][0] == ar) {    
+                }
+            }
+        }
         imediateRemoval();
     }
 }

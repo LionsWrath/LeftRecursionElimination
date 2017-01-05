@@ -1,4 +1,4 @@
 CC=gcc
 
 default:
-	$(CC) -gstabs -O2 -lm left-recursion-elimination.c
+	$(CC) -gstabs -O2 -lm lrecursion-list.c
