@@ -56,3 +56,5 @@ Session.vim
 *~
 # auto-generated tag files
 tags
+# plugin
+.ycm_extra_conf.py
