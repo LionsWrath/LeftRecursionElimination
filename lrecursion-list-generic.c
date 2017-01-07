@@ -60,7 +60,6 @@ void printRule(FILE *out, Rule *r) {
 }
 
 //------------------------------------------------------------Data Structure
-// One thing to improve is the deallocator on the Queue struct
 
 typedef struct Element {
     void *data;
@@ -70,14 +69,16 @@ typedef struct Element {
 typedef struct Queue {
     Element *begin, *end;
     unsigned int size;
+    void (*deallocator)(void*);
 } Queue;
 
-Queue * initializeQueue() {
+Queue * initializeQueue(void (*deallocator)(void*)) {
     Queue * ptr = malloc(sizeof(Queue));
     ptr->begin = NULL;
     ptr->end = NULL;
     ptr->size = 0;
-    
+    ptr->deallocator = deallocator;
+
     return ptr;
 }
 
@@ -152,7 +153,7 @@ bool pushToPosition(Queue *q, void *d, void *pos) {
     return true;
 }
 
-// Only free the element, not the data
+// Only free the data if exists a deallocator
 bool erase(Queue *q, void *d) {
     if (isQueueEmpty(q)) return false;
     
@@ -163,6 +164,9 @@ bool erase(Queue *q, void *d) {
             behind = element;
             element = element->next;
         } else {
+            // Running the deallocator
+            if (q->deallocator != NULL) 
+                q->deallocator(element->data);
             if (element == q->begin) {
                 q->begin = q->begin->next;
                 q->size--;
@@ -207,13 +211,13 @@ bool appendToPosition(Queue *dst, Queue *src, void *pos) {
 
 // High chance of memory leak
 // Can receive a deallocator for the data
-void clearQueue(Queue *q, void (*deallocator)(void*)) {
+void clearQueue(Queue *q) {
     Element *e = q->begin;
     Element *next;
     while (e != NULL) {
         next = e->next;
 
-        if (deallocator != NULL) deallocator(e->data);
+        if (q->deallocator != NULL) q->deallocator(e->data);
         
         free(e);
         e = next;
@@ -227,15 +231,15 @@ void clearQueue(Queue *q, void (*deallocator)(void*)) {
 //-----------------------------------------------------------FREE FUNCTIONS
 
 // Implement this - verify
-void freeQueue(Queue *q, void (*deallocator)(void*)) {
-    clearQueue(q, deallocator);
+void freeQueue(Queue *q) {
+    clearQueue(q);
     free(q);
 }
 
 // deallocator of Rule
 void freeRule(void *rule) {
     Rule *r = (struct Rule*) rule;
-    free(r->prod); //Verify the string free after
+    free(r->prod); // Estava dando problema por causa do strsep
     free(rule);
 }
 
@@ -380,7 +384,7 @@ void imediateElimination(Queue *grammar) {
 
 void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
     char *newProduction;     
-    Queue *newRules = initializeQueue();
+    Queue *newRules = initializeQueue(NULL);
 
     // Para cada match
     Element *e = matches->begin;
@@ -406,20 +410,19 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
 
         // Unite the newRules to the grammar
         appendToPosition(grammar, newRules, m);
-        clearQueue(newRules, NULL); // Clear the newRules
+        clearQueue(newRules); // Clear the newRules
         
         erase(grammar, m);  // Eliminar match da gramática
-        freeRule(m);
         e = e->next; 
     }
 
     // Free the Queue
-    freeQueue(newRules, NULL);
+    freeQueue(newRules);
 }
 
 void globalElimination(Queue *grammar, Queue *order) {
     Element *e = order->begin;
-    Queue *matches = initializeQueue();;
+    Queue *matches = initializeQueue(NULL); 
 
     while (e != NULL) {
         Element *t = order->begin;
@@ -432,7 +435,7 @@ void globalElimination(Queue *grammar, Queue *order) {
             }
 
             imediateElimination(grammar);   
-            clearQueue(matches, NULL);
+            clearQueue(matches);
             t = t->next;
         }
         e = e->next;   
@@ -465,11 +468,11 @@ int main(int argc, char *argv[]) {
     }
  
     //Load Grammar
-    g = initializeQueue();
+    g = initializeQueue(freeRule);
     readGrammar(filename, g);
     printGrammar(out, g);
 
-    order = initializeQueue();
+    order = initializeQueue(freeNumber);
     orderNT(g, order);
     printOrder(out, order);
 
