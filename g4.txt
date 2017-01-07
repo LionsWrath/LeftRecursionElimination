@@ -1,0 +1,7 @@
+S-TA
+A-+TA
+A-Si
+T-FB
+B-+FB
+F-(S)|i
+F-AB
