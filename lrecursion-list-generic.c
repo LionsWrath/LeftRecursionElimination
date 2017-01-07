@@ -60,6 +60,7 @@ void printRule(FILE *out, Rule *r) {
 }
 
 //------------------------------------------------------------Data Structure
+// One thing to improve is the deallocator on the Queue struct
 
 typedef struct Element {
     void *data;
@@ -204,9 +205,8 @@ bool appendToPosition(Queue *dst, Queue *src, void *pos) {
     return true;
 }
 
-// Dont free the data, just the elements
 // High chance of memory leak
-// Can receive a dallocator for the data
+// Can receive a deallocator for the data
 void clearQueue(Queue *q, void (*deallocator)(void*)) {
     Element *e = q->begin;
     Element *next;
@@ -226,7 +226,7 @@ void clearQueue(Queue *q, void (*deallocator)(void*)) {
 
 //-----------------------------------------------------------FREE FUNCTIONS
 
-// Implement this - verify the error
+// Implement this - verify
 void freeQueue(Queue *q, void (*deallocator)(void*)) {
     clearQueue(q, deallocator);
     free(q);
@@ -234,7 +234,8 @@ void freeQueue(Queue *q, void (*deallocator)(void*)) {
 
 // deallocator of Rule
 void freeRule(void *rule) {
-    //free(rule->prod); Verify the string free after
+    Rule *r = (struct Rule*) rule;
+    free(r->prod); //Verify the string free after
     free(rule);
 }
 
@@ -280,6 +281,7 @@ char* cleanString(char str[], char ch) {
    return newStr;
 }
 
+// Need to free others values after
 void readGrammar(char *filename, Queue *q) {
     FILE *input;
     char *line = NULL, *token = NULL;
@@ -301,8 +303,11 @@ void readGrammar(char *filename, Queue *q) {
             size_t idx = strcspn(token, "\n");
             memmove(&token[idx], &token[idx + 1], strlen(token) - idx);
 
+            char *production = createString(NCHAR);
+            strcpy(production, token);
+
             // Verify if need to allocate a new string for each struct            
-            push(q, createRule(actual, token));
+            push(q, createRule(actual, production));
         }
     }
 
@@ -404,7 +409,7 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
         clearQueue(newRules, NULL); // Clear the newRules
         
         erase(grammar, m);  // Eliminar match da gramática
-        //freeRule(m);
+        freeRule(m);
         e = e->next; 
     }
 
