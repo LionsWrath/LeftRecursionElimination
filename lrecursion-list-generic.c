@@ -479,5 +479,8 @@ int main(int argc, char *argv[]) {
     globalElimination(g, order);
     printGrammar(out, g);
 
+    clearQueue(g);
+    clearQueue(order);
+
     return 0;
 }
