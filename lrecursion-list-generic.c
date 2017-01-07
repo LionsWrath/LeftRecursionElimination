@@ -21,46 +21,47 @@
 #define START 'S'
 
 #define ERROR -1
-
-//------------------------------------------------------------Data Structure
+//----------------------------------------------------------------------Data
 
 typedef struct Rule {
     unsigned int l;
     char *prod;
-    struct Rule *next;
 } Rule;
 
+typedef struct Number {
+    unsigned int value;
+} Number;
+
+Rule * createRule(unsigned int left, char production[]) {
+    Rule *ptr = malloc(sizeof(Rule));
+    ptr->l = left;
+    ptr->prod = production;
+    
+    return ptr;
+}
+
+Number * createNumber(unsigned int value) {
+    Number *ptr = malloc(sizeof(Number));
+    ptr->value = value;
+
+    return ptr;
+}
+
+void printRule(FILE *out, Rule *r) {
+    fprintf(out, "  %c -> %s\n", r->l, r->prod);
+}
+
+//------------------------------------------------------------Data Structure
+
+typedef struct Element {
+    void *data;
+    void *next;
+} Element;
+
 typedef struct Queue {
-    Rule *begin, *end;
+    Element *begin, *end;
     unsigned int size;
 } Queue;
-
-bool isQueueEmpty(Queue *q) {
-    if (q->begin == NULL) return true;
-    return false;
-}
-
-bool exists(Queue *q, Rule *r) {
-    if (isQueueEmpty(q)) return false;
-    
-    Rule *rule = q->begin;
-    while (rule != NULL) {
-        if (rule != r) rule = rule->next;
-        else return true;
-    }
-    return false;
-}
-
-bool leftExists(Queue *q, Rule *r) {
-    if (isQueueEmpty(q)) return false;
-    
-    Rule *rule = q->begin;
-    while (rule != NULL) {
-        if (rule->l != r->l) rule = rule->next;
-        else return true;
-    }
-    return false;
-}
 
 Queue * initializeQueue() {
     Queue * ptr = malloc(sizeof(Queue));
@@ -71,66 +72,77 @@ Queue * initializeQueue() {
     return ptr;
 }
 
-void push(Queue *q, Rule *r) {
+Element * createElement(void *data) {
+    Element *ptr = malloc(sizeof(Element));
+    ptr->data = data;
+    ptr->next = NULL;
+
+    return ptr;
+}
+
+bool isQueueEmpty(Queue *q) {
+    if (q->begin == NULL) return true;
+    return false;
+}
+
+bool exists(Queue *q, void *d) {
+    if (isQueueEmpty(q)) return false;
+    
+    Element *element = q->begin;
+    while (element != NULL) {
+        if (element->data != d) element = element->next;
+        else return true;
+    }
+    return false;
+}
+
+void push(Queue *q, void *d) {
+    Element *element = createElement(d);
+
     if (q->begin == NULL) {
-        q->begin = r;
-        q->end = r;
-        //q->end->next = NULL;                //Pode omitir isso se deixar null na criação de uma regra
+        q->begin = element;
+        q->end = element;
         q->size++;
         return;
-    }
-    q->end->next = r;
-    q->end = r;
-    //q->end->next = NULL;
+    }  
+
+    q->end->next = element;
+    q->end = element;
     q->size++;
 }
 
-// Push a left only rule with no prod - without repetition
-void insertLeftOnly(Queue *q, Rule *r) {
-    if (!leftExists(q, r))
-        push(q, r);
-}
-
-bool erase(Queue *q, Rule *r) {
+// Dá free no element, não no dado
+bool erase(Queue *q, void *d) {
     if (isQueueEmpty(q)) return false;
     
-    Rule *behind = NULL;
-    Rule *rule = q->begin; 
-    while (rule != NULL) {
-        if (rule != r) {
-            behind = rule;
-            rule = rule->next;
+    Element *behind = NULL;
+    Element *element = q->begin; 
+    while (element != NULL) {
+        if (element->data != d) {
+            behind = element;
+            element = element->next;
         } else {
-            if (rule == q->begin) {
+            if (element == q->begin) {
                 q->begin = q->begin->next;
-                // Free aqui ou nem - pergunta
+                q->size--;
+                free(element);
                 return true;
             }
-            if (rule == q->end) {
+            if (element == q->end) {
                 q->end = behind;
                 q->end->next = NULL; 
+                q->size--;
+                free(element);
                 return true;
             }
-            behind->next = rule->next;
-            r->next = NULL;
+            behind->next = element->next;
+            q->size--;
+            free(element);
             return true;
         }
     }
     return false;
 } 
-
-Rule * createRule(unsigned int left, char production[]) {
-    Rule * ptr = malloc(sizeof(Rule));
-    ptr->l = left;
-    ptr->prod = production;
-    ptr->next = NULL;
-    
-    return ptr;
-}
-
-void printRule(FILE *out, Rule *r) {
-    fprintf(out, "  %c -> %s\n", r->l, r->prod);
-}
 
 //-----------------------------------------------------------SOME VARIABLES
 
@@ -145,10 +157,10 @@ void printGrammar(FILE *out, Queue *grammar) {
 
     fprintf(out, "Number of Rules: %u\n", grammar->size);
 
-    Rule *r = grammar->begin;    
-    while (r != NULL) {
-        printRule(out, r);
-        r = r->next;
+    Element *e = grammar->begin;    
+    while (e != NULL) {
+        printRule(out, e->data);
+        e = e->next;
     }
 }
 
@@ -202,14 +214,32 @@ void readGrammar(char *filename, Queue *q) {
 
 //----------------------------------------------------------------------ORDER
 
+bool numberExists(Queue *q, unsigned int value) {
+ 
+    Element *e = order->begin;
+    while (e != NULL) {
+        Number *n = (struct Number*) e->data;
+        if (n->value == value) return true;
+        
+        e = e->next;
+    }
+    return false; 
+}
+
+void insertNumber(Queue *q, unsigned int value) {
+    if (!numberExists(q, value))
+        push(q, createNumber(value));
+}
+
 void printOrder(FILE *out, Queue *order) {
 
     fprintf(out, "\nOrder: ");
 
-    Rule *r = order->begin;
-    while (r != NULL) {
-        fprintf(out, "%c ", r->l);
-        r = r->next;
+    Element *e = order->begin;
+    while (e != NULL) {
+        Number *n = (struct Number*) e->data;
+        fprintf(out, "%c ", n->value);
+        e = e->next;
     }
     fprintf(out, "\n");
 }
@@ -217,14 +247,38 @@ void printOrder(FILE *out, Queue *order) {
 void orderNT(Queue *q, Queue *orderSet) {
     int i;
 
-    Rule *r = q->begin;
-    while (r != NULL) {
-        insertLeftOnly(orderSet, createRule(r->l, NULL));
-        r = r->next;
+    Element *e = q->begin;
+    while (e != NULL) {
+        Number *n = (struct Number*) e->data;
+        insertNumber(orderSet, n->value);
+        e = e->next;
     }
 }
 
 //-----------------------------------------------------------------ELIMINATION
+
+Queue * findAllMatches(Queue *grammar) {
+
+}
+
+void imediateElimination() {
+
+}
+
+void globalElimination(Queue *grammar, Queue *order) {
+    int i, j;
+    Element *e = order->begin;
+
+    for (i=0; i<order->size; i++) {
+        for (j=0; j<i-1; j++) {
+            // Find all Matches
+            // Substituir matches por todas as produções de Aj
+            // Remover todas as recursões imediatas
+            imediateElimination();   
+        }
+        e = e->next;   
+    }
+}
 
 int main(int argc, char *argv[]) {
     char filename[100], output[100];
