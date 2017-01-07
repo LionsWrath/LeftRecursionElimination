@@ -21,6 +21,7 @@
 #define START 'S'
 
 #define ERROR -1
+
 //----------------------------------------------------------------------Data
 
 typedef struct Rule {
@@ -103,7 +104,6 @@ bool exists(Queue *q, void *d) {
     return false;
 }
 
-// Testing
 Element * getElement(Queue *q, void *d) {
     if (isQueueEmpty(q)) return NULL;
     
@@ -130,8 +130,6 @@ void push(Queue *q, void *d) {
     q->size++;
 }
 
-// Testing
-// Adjust the begin/end
 // This function cannot add on the beginning
 // No need to adjust the begin then (this is bad, actually)
 bool pushToPosition(Queue *q, void *d, void *pos) {
@@ -153,7 +151,7 @@ bool pushToPosition(Queue *q, void *d, void *pos) {
     return true;
 }
 
-// Dá free no element, não no dado
+// Only free the element, not the data
 bool erase(Queue *q, void *d) {
     if (isQueueEmpty(q)) return false;
     
@@ -208,18 +206,43 @@ bool appendToPosition(Queue *dst, Queue *src, void *pos) {
 
 // Dont free the data, just the elements
 // High chance of memory leak
-void clearQueue(Queue *q) {
+// Can receive a dallocator for the data
+void clearQueue(Queue *q, void (*deallocator)(void*)) {
     Element *e = q->begin;
     Element *next;
     while (e != NULL) {
         next = e->next;
+
+        if (deallocator != NULL) deallocator(e->data);
+        
         free(e);
         e = next;
     }
 
     q->begin = NULL;
     q->end = NULL;
+    q->size = 0;
 }
+
+//-----------------------------------------------------------FREE FUNCTIONS
+
+// Implement this - verify the error
+void freeQueue(Queue *q, void (*deallocator)(void*)) {
+    clearQueue(q, deallocator);
+    free(q);
+}
+
+// deallocator of Rule
+void freeRule(void *rule) {
+    //free(rule->prod); Verify the string free after
+    free(rule);
+}
+
+// deallocator of Number
+void freeNumber(void *number) {
+    free(number);
+}
+
 //-----------------------------------------------------------SOME VARIABLES
 
 Queue *g;
@@ -277,7 +300,8 @@ void readGrammar(char *filename, Queue *q) {
             //Remove trailing newline
             size_t idx = strcspn(token, "\n");
             memmove(&token[idx], &token[idx + 1], strlen(token) - idx);
-            
+
+            // Verify if need to allocate a new string for each struct            
             push(q, createRule(actual, token));
         }
     }
@@ -368,8 +392,6 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
                 strcpy(newProduction, r->prod);
                 strcat(newProduction, m->prod + 1);
 
-                fprintf(stdout, "           Prod: %s\n", newProduction);
-
                 // Adicionar nova regra na gramatica
                 push(newRules, createRule(m->l, newProduction));
             }
@@ -378,15 +400,16 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
         }
 
         // Unite the newRules to the grammar
-        fprintf(stderr, "APPEND: %s\n", appendToPosition(grammar, newRules, m) ? "True" : "False");
-        clearQueue(newRules); // Clear the newRules
+        appendToPosition(grammar, newRules, m);
+        clearQueue(newRules, NULL); // Clear the newRules
+        
         erase(grammar, m);  // Eliminar match da gramática
-        // Free the matched rule - memory leak otherwise
+        //freeRule(m);
         e = e->next; 
     }
 
-    free(newRules);
     // Free the Queue
+    freeQueue(newRules, NULL);
 }
 
 void globalElimination(Queue *grammar, Queue *order) {
@@ -396,18 +419,15 @@ void globalElimination(Queue *grammar, Queue *order) {
     while (e != NULL) {
         Element *t = order->begin;
         while (t != e) {
-            // Find all Matches
             findAllMatches(grammar, matches, e->data, t->data);
             
             if (!isQueueEmpty(matches)) { 
                 printGrammar(stdout, matches);
-                // Substituir matches por todas as produções de Aj
                 substituteMatches(grammar, matches, t->data);
             }
 
-            // Imediate left recursion elimination
             imediateElimination(grammar);   
-            clearQueue(matches);
+            clearQueue(matches, NULL);
             t = t->next;
         }
         e = e->next;   
