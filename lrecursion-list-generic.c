@@ -47,6 +47,13 @@ Number * createNumber(unsigned int value) {
     return ptr;
 }
 
+char * createString(unsigned int size) {
+    char *str = malloc(size * sizeof(char));
+    str[0] = '\0'; 
+
+    return str;
+}
+
 void printRule(FILE *out, Rule *r) {
     fprintf(out, "  %c -> %s\n", r->l, r->prod);
 }
@@ -124,6 +131,9 @@ void push(Queue *q, void *d) {
 }
 
 // Testing
+// Adjust the begin/end
+// This function cannot add on the beginning
+// No need to adjust the begin then (this is bad, actually)
 bool pushToPosition(Queue *q, void *d, void *pos) {
     Element *e = createElement(d);
     Element *t = getElement(q, pos);
@@ -132,10 +142,14 @@ bool pushToPosition(Queue *q, void *d, void *pos) {
     if (t->next == NULL) {
         t->next = e;
         e->next = NULL;
+        
+        q->end = e;
     } else {
         e->next = t->next;
         t->next = e;
     }
+
+    q->size++;
     return true;
 }
 
@@ -189,6 +203,7 @@ bool appendToPosition(Queue *dst, Queue *src, void *pos) {
         pos = e->data; // To put in the correct order
         e = e->next; 
     }
+    return true;
 }
 
 // Dont free the data, just the elements
@@ -316,9 +331,7 @@ void orderNT(Queue *q, Queue *orderSet) {
 
 //-----------------------------------------------------------------ELIMINATION
 
-Queue * findAllMatches(Queue *grammar, Number *nl, Number *nr) {
-    Queue *matches = initializeQueue();
-
+Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
     fprintf(stderr, "Ai = %c, Aj = %c\n", nl->value, nr->value);
     Element *e = grammar->begin;
     while (e != NULL) {
@@ -350,8 +363,7 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
         while (t != NULL) {
             Rule *r = t->data;
             if (r->l == n->value) {
-                newProduction = malloc(NCHAR * sizeof(char));
-                newProduction[0] = '\0';
+                newProduction = createString(NCHAR);
 
                 strcpy(newProduction, r->prod);
                 strcat(newProduction, m->prod + 1);
@@ -366,7 +378,7 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
         }
 
         // Unite the newRules to the grammar
-        appendToPosition(grammar, newRules, m);
+        fprintf(stderr, "APPEND: %s\n", appendToPosition(grammar, newRules, m) ? "True" : "False");
         clearQueue(newRules); // Clear the newRules
         erase(grammar, m);  // Eliminar match da gramática
         // Free the matched rule - memory leak otherwise
@@ -379,14 +391,13 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
 
 void globalElimination(Queue *grammar, Queue *order) {
     Element *e = order->begin;
+    Queue *matches = initializeQueue();;
 
     while (e != NULL) {
         Element *t = order->begin;
         while (t != e) {
             // Find all Matches
-            // Change to an external match initialization
-            // But internal clearing - memory leak on multiple Queue creations
-            Queue *matches = findAllMatches(grammar, e->data, t->data);
+            findAllMatches(grammar, matches, e->data, t->data);
             
             if (!isQueueEmpty(matches)) { 
                 printGrammar(stdout, matches);
@@ -396,7 +407,7 @@ void globalElimination(Queue *grammar, Queue *order) {
 
             // Imediate left recursion elimination
             imediateElimination(grammar);   
-            // Free the Queue "matches" structure
+            clearQueue(matches);
             t = t->next;
         }
         e = e->next;   
