@@ -240,17 +240,11 @@ void clearQueue(Queue *q) {
 		//fprintf(stdout, "percorrendo a grammar, iteracao: %i\n", i);
         next = e->next;
 
-        if (q->deallocator != NULL) {
-			//fprintf(stderr, "1 BATATAAAAAAAA!\n");
-			q->deallocator(e->data);
-			//fprintf(stderr, "BOOOOM!\n");
-		}
-        //fprintf(stderr, "2 BATATAAAAAAAA!\n");
+        if (q->deallocator != NULL) q->deallocator(e->data);
+
         free(e);
         e = next;
-		//fprintf(stderr, "3 BATATAAAAAAAA!\n");
     }
-	//fprintf(stderr, "4 BATATAAAAAAAA!\n");
     q->begin = NULL;
     q->end = NULL;
     q->size = 0;
