@@ -1,0 +1,5 @@
+S-SA
+S-A
+S-T
+A-i
+T-n
