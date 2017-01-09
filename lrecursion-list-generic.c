@@ -209,17 +209,6 @@ bool appendToPosition(Queue *dst, Queue *src, void *pos) {
     return true;
 }
 
-bool eraseBasedOnQueue(Queue *q, Queue *src) {
-    bool changed = false;
-    Element *e = src->begin;
-    while (e != NULL) {
-        changed = changed || erase(q, e->data);
-        e = e->next;
-    }
-
-    return changed;
-}
-
 // High chance of memory leak
 // Can receive a deallocator for the data
 void clearQueue(Queue *q) {
@@ -240,6 +229,22 @@ void clearQueue(Queue *q) {
     q->begin = NULL;
     q->end = NULL;
     q->size = 0;
+}
+
+// This clear the src Queue, as it makes no sense to not do it
+// All values data from src would be invalid otherwise
+bool eraseBasedOnQueue(Queue *q, Queue *src) {
+    bool changed = true;
+    
+    Element *e = src->begin;
+    while (e != NULL) {
+        bool result = erase(q, e->data);
+        changed = changed && result;
+        e = e->next;
+    }
+    
+    clearQueue(src);
+    return changed;
 }
 
 //-----------------------------------------------------------FREE FUNCTIONS
@@ -539,11 +544,8 @@ void imediateElimination(Queue *grammar) {
             addBetas(grammar, betaRules, newNT, r); 
 
             // Apagar todos os elementos de Alpha e Beta da grammar
-            eraseBasedOnQueue(grammar, betaRules);
-            eraseBasedOnQueue(grammar, alphaRules);
-
-            clearQueue(betaRules); // Clear the betaRules
-            clearQueue(alphaRules); // Clear the alphaRules
+            fprintf(stderr,"E1: %s\n", eraseBasedOnQueue(grammar, betaRules) ? "ERASED" : "WRONG");
+            fprintf(stderr,"E2: %s\n", eraseBasedOnQueue(grammar, alphaRules) ? "ERASED" : "WRONG");
         }
         e = e->next;
     }
@@ -592,7 +594,6 @@ void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
 }
 
 Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
-    //fprintf(stderr, "Ai = %c, Aj = %c\n", nl->value, nr->value);
     Element *e = grammar->begin;
     while (e != NULL) {
         Rule *r = (struct Rule*) e->data;     
@@ -615,7 +616,6 @@ void globalElimination(Queue *grammar, Queue *order) {
             findAllMatches(grammar, matches, e->data, t->data);
             
             if (!isQueueEmpty(matches)) { 
-                printGrammar(stdout, matches);
                 substituteMatches(grammar, matches, t->data);
             }
 
@@ -668,14 +668,11 @@ int main(int argc, char *argv[]) {
     printOrder(out, order);
 
     globalElimination(g, order);
+    fprintf(stderr, "--------END\n");
     printGrammar(out, g);
 
-    //fprintf(stdout, "Terminou tudo, so falta os free\n");
-
     freeQueue(g);
-    //fprintf(stdout, "After free g\n");
     freeQueue(order);
-    //fprintf(stdout, "After free order\n");
 
     return 0;
 }
