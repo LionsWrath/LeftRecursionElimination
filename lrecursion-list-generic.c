@@ -411,11 +411,18 @@ char getUnusedNonTerminal(Queue * available) {
     return c;
 }
 
+// Testing this
+bool isEProduction(Rule *rule) {
+    if (rule->prod[0] == LAMBDA) return true;
+    return false;
+}
+
 Queue * findBetas(Queue *grammar, Queue *beta, Number *nl) {
     Element *e = grammar->begin;
 
     while (e != NULL) {
-        Rule *r = (struct Rule*) e->data;     
+        Rule *r = (struct Rule*) e->data;
+        
         if (r->l == nl->value) 
 	    if (nl->value != r->prod[0]) {
                 push(beta, r);
@@ -446,6 +453,7 @@ Queue * findAlphas(Queue *grammar, Queue *alpha, Number *nl) {
     return alpha;
 }
 
+// Not sure if this is needed
 bool existEProduction(Queue *grammar, unsigned int n) {
     Element *e = grammar->begin;
 
@@ -453,7 +461,7 @@ bool existEProduction(Queue *grammar, unsigned int n) {
         Rule *r = (struct Rule*) e->data;     
         
         if (r->l == n) 
-            if (r->prod[0] == LAMBDA) return true;	//already inserted e-production
+            if (isEProduction(r)) return true;	//already inserted e-production
         
         e = e->next;
     }
@@ -476,7 +484,8 @@ Queue * addBetas(Queue *grammar, Queue *beta, char newNT, Rule *pos) {
         Rule *r = e->data;
         newProduction = createString(NCHAR);
 
-        strcpy(newProduction, r->prod);
+        if (!isEProduction(r))
+            strcpy(newProduction, r->prod);
         appendChar(newProduction, newNT); 
 
         Rule *newRule = createRule(pos->l, newProduction);
@@ -520,7 +529,7 @@ Queue * addEProduction(Queue *grammar, char newNT, Rule *pos) {
 }
 
 // Add abailableNT as parameter after
-void imediateElimination(Queue *grammar) {
+void imediateElimination(Queue *grammar, Rule *rule) {
     Queue *betaRules = initializeQueue(NULL);
     Queue *alphaRules = initializeQueue(NULL);
     
@@ -528,7 +537,7 @@ void imediateElimination(Queue *grammar) {
     while (e != NULL) {
         
         Rule *r = (struct Rule*) e->data;     
-        if (r->l == r->prod[0]) {
+        if (r->l == r->prod[0] && r->l == rule->l) {
             fprintf(stderr, ">>>>>>>>Imediate Elimination\n\n");
             findBetas(grammar, betaRules, e->data);
             findAlphas(grammar, alphaRules, e->data); 
@@ -623,7 +632,7 @@ void globalElimination(Queue *grammar, Queue *order) {
             printGrammar(stderr, grammar);
             fprintf(stderr, "-------->\n");
             
-            imediateElimination(grammar);
+            imediateElimination(grammar, e->data);
             clearQueue(matches);
             t = t->next;
         }
