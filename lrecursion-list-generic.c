@@ -427,13 +427,16 @@ void createFinalSymbol(Rule *rule) {
 }
 
 bool preserveFinalSymbols(Queue *grammar, unsigned int initial) {
-    Element *e = grammar->begin;
+    bool hasFinal = false;
 
+    Element *e = grammar->begin;
     while (e != NULL) {
         Rule *r = e->data;
 
-        if (hasFinalSymbol(r) && r->l == initial)
+        if (hasFinalSymbol(r) && r->l == initial) {
+            hasFinal = true;
             eliminateFinalSymbol(r);
+        }
         if (hasFinalSymbol(r) && r->l != initial) {
             fprintf(stderr, "Símbolo final em produção não inicial! Abortado.");
             exit(EXIT_FAILURE);
@@ -441,6 +444,8 @@ bool preserveFinalSymbols(Queue *grammar, unsigned int initial) {
 
         e = e->next;
     }
+    
+    return hasFinal;
 }
 
 void putFinalSymbols(Queue *grammar, unsigned int initial) {
@@ -627,9 +632,9 @@ Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
 }
 
 void globalElimination(Queue *grammar, Queue *order) {
-    Element *e = order->begin;
     Queue *matches = initializeQueue(NULL); 
 
+    Element *e = order->begin;
     while (e != NULL) {
         Element *t = order->begin;
         while (t != e) {
@@ -639,10 +644,11 @@ void globalElimination(Queue *grammar, Queue *order) {
                 substituteMatches(grammar, matches, t->data);
             }
 
-            imediateElimination(grammar, e->data);
             clearQueue(matches);
             t = t->next;
         }
+
+        imediateElimination(grammar, e->data);
         e = e->next;   
     }
 }
@@ -679,7 +685,7 @@ int main(int argc, char *argv[]) {
     fprintf(out, "Original Grammar:\n\n");
     printGrammar(out, g);
 
-    preserveFinalSymbols(g, INITIAL);
+    hasFinal = preserveFinalSymbols(g, INITIAL);
 
     // Create the order and list of available NT
     order = initializeQueue(freeNumber);
@@ -694,7 +700,7 @@ int main(int argc, char *argv[]) {
 
     globalElimination(g, order);
 
-    putFinalSymbols(g, INITIAL);
+    if (hasFinal) putFinalSymbols(g, INITIAL);
 
     printGrammar(out, g);
 
