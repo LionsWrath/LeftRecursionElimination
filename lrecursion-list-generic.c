@@ -14,6 +14,8 @@
 #define NCHAR 100
 
 #define LAMBDA 'e'
+#define FINAL '$'
+#define INITIAL 'S'
 
 //----------------------------------------------------------------------Data
 
@@ -265,6 +267,8 @@ Queue *availableNT;
 
 char const allNonTerminals[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+bool hasFinal = false;
+
 //-------------------------------------------------------------------READ
 
 void printGrammar(FILE *out, Queue *grammar) {
@@ -403,6 +407,53 @@ char getUnusedNonTerminal(Queue * available) {
 bool isEProduction(Rule *rule) {
     if (rule->prod[0] == LAMBDA) return true;
     return false;
+}
+
+bool hasFinalSymbol(Rule *rule) {
+    int size = strlen(rule->prod);
+    if (rule->prod[size - 1] == FINAL) return true;
+    return false;
+}
+
+void eliminateFinalSymbol(Rule *rule) {
+    int size = strlen(rule->prod);
+    rule->prod[size - 1] = '\0';
+}
+
+void createFinalSymbol(Rule *rule) {
+    int size = strlen(rule->prod);
+    rule->prod[size] = FINAL;
+    rule->prod[size + 1] = '\0';
+}
+
+bool preserveFinalSymbols(Queue *grammar, unsigned int initial) {
+    Element *e = grammar->begin;
+
+    while (e != NULL) {
+        Rule *r = e->data;
+
+        if (hasFinalSymbol(r) && r->l == initial)
+            eliminateFinalSymbol(r);
+        if (hasFinalSymbol(r) && r->l != initial) {
+            fprintf(stderr, "Símbolo final em produção não inicial! Abortado.");
+            exit(EXIT_FAILURE);
+        }
+
+        e = e->next;
+    }
+}
+
+void putFinalSymbols(Queue *grammar, unsigned int initial) {
+    Element *e = grammar->begin;
+
+    while (e != NULL) {
+        Rule *r = e->data;
+
+        if (r->l == initial)
+           createFinalSymbol(r); 
+
+        e = e->next;
+    }
 }
 
 Queue * findBetas(Queue *grammar, Queue *beta, Number *nl) {
@@ -628,6 +679,8 @@ int main(int argc, char *argv[]) {
     fprintf(out, "Original Grammar:\n\n");
     printGrammar(out, g);
 
+    preserveFinalSymbols(g, INITIAL);
+
     // Create the order and list of available NT
     order = initializeQueue(freeNumber);
     availableNT = initializeQueue(freeNumber);
@@ -640,6 +693,9 @@ int main(int argc, char *argv[]) {
     fprintf(out, "After removing:\n\n");
 
     globalElimination(g, order);
+
+    putFinalSymbols(g, INITIAL);
+
     printGrammar(out, g);
 
     freeQueue(g);
