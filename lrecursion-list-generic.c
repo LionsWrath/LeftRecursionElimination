@@ -62,10 +62,12 @@ char * newNonTerminal(unsigned int n) {
 	newProduction = createString(NCHAR);
 	nonT = createString(NCHAR);
 
-	if (n > 255) sprintf(nonT, "%c", n);
+	if (n > 255) {
+		sprintf(nonT, "%c", n);
 
-	strcpy(newProduction, nonT);
-	strcat(newProduction, "`");
+		strcpy(newProduction, nonT);
+		strcat(newProduction, "`");
+	}
 
 	return newProduction;
 }
@@ -401,14 +403,14 @@ Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
 }
 
 Queue * findBeta(Queue *grammar, Queue *beta, Number *nl, char *prod) {
-	//fprintf(stderr, "findBeta -> Ai = %c, Prod = %s\n", nl->value, prod);
+	//fprintf(stderr, "findBeta -> Ai = %c(%i), Prod = %s\n", nl->value, nl->value, prod);
 	Element *e = grammar->begin;
 
     while (e != NULL) {
         Rule *r = (struct Rule*) e->data;     
         if (r->l == nl->value) 
         	//if (r->prod[0] == nr->value)
-			if (prod != r->prod && prod[0] != r->prod[0]) {
+			if (prod != r->prod && prod[0] != r->prod[0] /*&& r->prod[0] != 'e'*/) {
             	push(beta, r);
 			}
         e = e->next;
@@ -421,10 +423,21 @@ Queue * newBeta(Queue *beta, Number *nl) {
 	char *newProduction;
 	Element *e = beta->begin;
 
+
+	//unsigned int aux = nl->value + 256;
 	nl->value += 256;
 
     while (e != NULL) {
         Rule *r = (struct Rule*) e->data;  
+
+	
+		if (r->prod[0] == LAMBDA) {
+			r->prod[0] = '\0';
+			newProduction = createString(NCHAR);
+			strcpy(newProduction, newNonTerminal(nl->value));
+			e = e->next;
+			continue;
+		}
 
 		int size = strlen(r->prod);
 		if (r->prod[size-1] == '`') {
@@ -442,13 +455,16 @@ Queue * newBeta(Queue *beta, Number *nl) {
         e = e->next;
     }
 
-	
-
     return beta;
 }
 
 Queue * newAlpha(Queue *alpha, Number *nl, Rule *r) {
 	char *newProduction;
+
+	if (r->prod[strlen(r->prod)-1] == '`') {
+		r->prod[strlen(r->prod)-1] = '\0';
+		r->prod[strlen(r->prod)-2] = '\0';
+	}
 
 	Rule *alphaR;
 	alphaR->l = nl->value;
@@ -456,6 +472,7 @@ Queue * newAlpha(Queue *alpha, Number *nl, Rule *r) {
 
 	newProduction = createString(NCHAR);
 	strcpy(newProduction, alphaR->prod);
+
 	strcat(newProduction, newNonTerminal(alphaR->l));
 
 	alphaR->prod = newProduction;
@@ -491,11 +508,11 @@ void imediateElimination(Queue *grammar) {
 		char *eProduction;
 
         Rule *r = (struct Rule*) e->data;     
-        if (r->l == r->prod[0]) {
+        if (r->l == r->prod[0] && r->prod[1] != '`') {
 
 			findBeta(grammar, betaRules, e->data, r->prod);
 			newBeta(betaRules, e->data);
-			
+
 			newAlpha(alphaRules, e->data, r);
 			fprintf(stderr, "APPEND: %s\n", appendToPosition(grammar, alphaRules, m) ? "True" : "False");
 
@@ -504,6 +521,8 @@ void imediateElimination(Queue *grammar) {
 
 			eProduction = createString(NCHAR);
 			eProduction[0] = LAMBDA;
+			eProduction[1] = '\0';
+
 
 			if (!checkE(grammar, m->l)) push(grammar, createRule(m->l, eProduction));
 
