@@ -1,3 +1,4 @@
-S-S+T$|S-T$|T$
+S-A$
+A-A+T|A-T|T
 T-T*F|T/F|F
 F-(S)|i|n
