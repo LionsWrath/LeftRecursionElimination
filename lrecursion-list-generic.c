@@ -10,17 +10,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include <ctype.h>
 
 #define NCHAR 100
 
-#define SETSIZE 100
-
 #define LAMBDA 'e'
-#define FINAL '$'
-#define START 'S'
-
-#define ERROR -1
 
 //----------------------------------------------------------------------Data
 
@@ -55,27 +48,8 @@ char * createString(unsigned int size) {
     return str;
 }
 
-char * newNonTerminal(unsigned int n) {
-	char *newProduction;
-	char *nonT;
-
-	newProduction = createString(NCHAR);
-	nonT = createString(NCHAR);
-
-	if (n > 255) sprintf(nonT, "%c", n);
-
-	strcpy(newProduction, nonT);
-	strcat(newProduction, "`");
-
-	return newProduction;
-}
-
 void printRule(FILE *out, Rule *r) {
-	if (r->l > 255) {
-		char *newProduction = newNonTerminal(r->l);
-		fprintf(out, "  %s -> %s\n", newProduction, r->prod);
-	} else
-    	fprintf(out, "  %c -> %s\n", r->l, r->prod);
+    fprintf(out, "      %c -> %s\n", r->l, r->prod);
 }
 
 //------------------------------------------------------------Data Structure
@@ -234,10 +208,7 @@ void clearQueue(Queue *q) {
     Element *e = q->begin;
     Element *next;
 
-	int i = -1;
     while (e != NULL) {
-		i++;
-		//fprintf(stdout, "percorrendo a grammar, iteracao: %i\n", i);
         next = e->next;
 
         if (q->deallocator != NULL) q->deallocator(e->data);
@@ -250,9 +221,25 @@ void clearQueue(Queue *q) {
     q->size = 0;
 }
 
+// This clear the src Queue, as it makes no sense to not do it
+// All values data from src would be invalid otherwise
+bool eraseBasedOnQueue(Queue *q, Queue *src) {
+    bool changed = true;
+    
+    Element *e = src->begin;
+    while (e != NULL) {
+        bool result = erase(q, e->data);
+        changed = changed && result;
+        e = e->next;
+    }
+    
+    clearQueue(src);
+    return changed;
+}
+
 //-----------------------------------------------------------FREE FUNCTIONS
 
-// Implement this - verify
+// deallocator of Queue
 void freeQueue(Queue *q) {
     clearQueue(q);
     free(q);
@@ -261,7 +248,7 @@ void freeQueue(Queue *q) {
 // deallocator of Rule
 void freeRule(void *rule) {
     Rule *r = (struct Rule*) rule;
-    free(r->prod); // Estava dando problema por causa do strsep
+    free(r->prod);
     free(rule);
 }
 
@@ -274,12 +261,15 @@ void freeNumber(void *number) {
 
 Queue *g;
 Queue *order; 
+Queue *availableNT;
+
+char const allNonTerminals[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 //-------------------------------------------------------------------READ
 
 void printGrammar(FILE *out, Queue *grammar) {
 
-    fprintf(out, "Number of Rules: %u\n", grammar->size);
+    fprintf(out, "  Number of Rules: %u\n", grammar->size);
 
     Element *e = grammar->begin;    
     while (e != NULL) {
@@ -332,7 +322,6 @@ void readGrammar(char *filename, Queue *q) {
             char *production = createString(NCHAR);
             strcpy(production, token);
 
-            // Verify if need to allocate a new string for each struct            
             push(q, createRule(actual, production));
         }
     }
@@ -362,7 +351,7 @@ void insertNumber(Queue *q, unsigned int value) {
 
 void printOrder(FILE *out, Queue *order) {
 
-    fprintf(out, "\nOrder: ");
+    fprintf(out, "\nUsed Order: ");
 
     Element *e = order->begin;
     while (e != NULL) {
@@ -386,8 +375,194 @@ void orderNT(Queue *q, Queue *orderSet) {
 
 //-----------------------------------------------------------------ELIMINATION
 
+// This sets the maximum available NT as 26
+void populateAvailableNT(Queue * available, Queue *order) {
+    int i;
+    int size = strlen(allNonTerminals);
+
+    for (i=0; i<size; i++) {
+        if (!numberExists(order, allNonTerminals[i]))
+            push(available, createNumber(allNonTerminals[i])); 
+    }
+}
+
+// this already sets the NT as used
+char getUnusedNonTerminal(Queue * available) {
+    if (isQueueEmpty(available)) {
+        fprintf(stderr, "Fora do número máximo de Não Terminais, abortado.\n");   
+        exit(EXIT_FAILURE);
+    }
+    
+    Number *n = available->begin->data;
+    char c = n->value;
+    erase(available, n);
+
+    return c;
+}
+
+bool isEProduction(Rule *rule) {
+    if (rule->prod[0] == LAMBDA) return true;
+    return false;
+}
+
+Queue * findBetas(Queue *grammar, Queue *beta, Number *nl) {
+    Element *e = grammar->begin;
+
+    while (e != NULL) {
+        Rule *r = (struct Rule*) e->data;
+        
+        if (r->l == nl->value) 
+	    if (nl->value != r->prod[0]) {
+                push(beta, r);
+	    }
+        e = e->next;
+    }
+
+    return beta;
+}
+
+Queue * findAlphas(Queue *grammar, Queue *alpha, Number *nl) {
+    Element *e = grammar->begin;
+
+    while (e != NULL) {
+        Rule *r = (struct Rule*) e->data;     
+        if (r->l == nl->value) {
+            // Eliminating A->A
+            if (nl->value == r->prod[0] && r->prod[1] == '\0') {
+                erase(grammar, r);
+            } 
+	    if (nl->value == r->prod[0]) {
+                push(alpha, r);
+	    }
+        }
+        e = e->next;
+    }
+
+    return alpha;
+}
+
+void appendChar(char *str, char c) {
+    int size = strlen(str);
+    
+    str[size] = c;
+    str[size + 1] = '\0';
+}
+
+Queue * addBetas(Queue *grammar, Queue *beta, char newNT, Rule *pos) {
+    char *newProduction;
+
+    Element *e = beta->begin;
+    while (e != NULL) {
+        Rule *r = e->data;
+        newProduction = createString(NCHAR);
+
+        if (!isEProduction(r))
+            strcpy(newProduction, r->prod);
+        appendChar(newProduction, newNT); 
+
+        Rule *newRule = createRule(pos->l, newProduction);
+        pushToPosition(grammar, newRule, pos); 
+
+        pos = newRule;
+        e = e->next;
+    }
+}
+
+Queue * addAlphas(Queue *grammar, Queue *alpha, char newNT, Rule *pos) {
+    char *newProduction;
+
+    Element *e = alpha->begin;
+    while (e != NULL) {
+        Rule *r = e->data;
+        newProduction = createString(NCHAR);
+
+        strcpy(newProduction, r->prod + 1);
+        appendChar(newProduction, newNT); 
+
+        Rule *newRule = createRule(newNT, newProduction);
+        pushToPosition(grammar, newRule, pos);
+
+        pos = newRule;
+        e = e->next;
+    }
+}
+
+Queue * addEProduction(Queue *grammar, char newNT, Rule *pos) {
+    char *eProduction;
+    
+    eProduction = createString(NCHAR);
+
+    eProduction[0] = LAMBDA;
+    eProduction[1] = '\0'; 
+
+    pushToPosition(grammar, createRule(newNT, eProduction), pos);
+}
+
+// Add abailableNT as parameter after
+void imediateElimination(Queue *grammar, Rule *rule) {
+    Queue *betaRules = initializeQueue(NULL);
+    Queue *alphaRules = initializeQueue(NULL);
+    
+    Element *e = grammar->begin;
+    while (e != NULL) {
+        
+        Rule *r = (struct Rule*) e->data;     
+        if (r->l == r->prod[0] && r->l == rule->l) {
+            findBetas(grammar, betaRules, e->data);
+            findAlphas(grammar, alphaRules, e->data); 
+          
+            char newNT = getUnusedNonTerminal(availableNT);
+            
+            addEProduction(grammar, newNT, r);
+            addAlphas(grammar, alphaRules, newNT, r);
+            addBetas(grammar, betaRules, newNT, r); 
+
+            eraseBasedOnQueue(grammar, betaRules);
+            eraseBasedOnQueue(grammar, alphaRules);
+        }
+        e = e->next;
+    }
+   
+    freeQueue(betaRules);
+    freeQueue(alphaRules);
+}
+
+void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
+    char *newProduction;     
+    Queue *newRules = initializeQueue(NULL);
+
+    // For each match
+    Element *e = matches->begin;
+    while (e != NULL) {
+        Rule *m = e->data;
+
+        // Find all production of n in the grammar
+        Element *t = grammar->begin;
+        while (t != NULL) {
+            Rule *r = t->data;
+            if (r->l == n->value) {
+                newProduction = createString(NCHAR);
+
+                strcpy(newProduction, r->prod);
+                strcat(newProduction, m->prod + 1);
+
+                push(newRules, createRule(m->l, newProduction));
+            }
+
+            t = t->next;
+        }
+
+        appendToPosition(grammar, newRules, m);
+        clearQueue(newRules);
+        
+        erase(grammar, m);
+        e = e->next; 
+    }
+
+    freeQueue(newRules);
+}
+
 Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
-    //fprintf(stderr, "Ai = %c, Aj = %c\n", nl->value, nr->value);
     Element *e = grammar->begin;
     while (e != NULL) {
         Rule *r = (struct Rule*) e->data;     
@@ -400,162 +575,6 @@ Queue * findAllMatches(Queue *grammar, Queue *matches, Number *nl, Number *nr) {
     return matches;
 }
 
-Queue * findBeta(Queue *grammar, Queue *beta, Number *nl, char *prod) {
-	//fprintf(stderr, "findBeta -> Ai = %c, Prod = %s\n", nl->value, prod);
-	Element *e = grammar->begin;
-
-    while (e != NULL) {
-        Rule *r = (struct Rule*) e->data;     
-        if (r->l == nl->value) 
-        	//if (r->prod[0] == nr->value)
-			if (prod != r->prod && prod[0] != r->prod[0]) {
-            	push(beta, r);
-			}
-        e = e->next;
-    }
-
-    return beta;
-}
-
-Queue * newBeta(Queue *beta, Number *nl) {
-	char *newProduction;
-	Element *e = beta->begin;
-
-	nl->value += 256;
-
-    while (e != NULL) {
-        Rule *r = (struct Rule*) e->data;  
-
-		int size = strlen(r->prod);
-		if (r->prod[size-1] == '`') {
-			e = e->next;
-			continue;
-		}
-
-		newProduction = createString(NCHAR);
-
-		strcpy(newProduction, r->prod);
-		strcat(newProduction, newNonTerminal(nl->value));
-
-		r->prod = newProduction;
-
-        e = e->next;
-    }
-
-	
-
-    return beta;
-}
-
-Queue * newAlpha(Queue *alpha, Number *nl, Rule *r) {
-	char *newProduction;
-
-	Rule *alphaR;
-	alphaR->l = nl->value;
-	alphaR->prod = r->prod+1;
-
-	newProduction = createString(NCHAR);
-	strcpy(newProduction, alphaR->prod);
-	strcat(newProduction, newNonTerminal(alphaR->l));
-
-	alphaR->prod = newProduction;
-
-	push(alpha, createRule(alphaR->l, alphaR->prod));
-	
-    return alpha;
-}
-
-bool checkE(Queue *grammar, unsigned int n) {
-	Element *e = grammar->begin;
-
-	while (e != NULL) {
-        Rule *r = (struct Rule*) e->data;     
-        if (r->l == n) 
-        	//if (r->prod[0] == nr->value)
-			if (r->prod[0] == 'e') return true;	//already inserted e-production
-        e = e->next;
-    }
-	
-	return false;	//no e-production found
-}
-
-void imediateElimination(Queue *grammar) {
-	char *newProduction;
-	Element *e = grammar->begin;
-
-	while (e != NULL) {
-		Rule *m = e->data;
-		Queue *betaRules = initializeQueue(NULL);
-		Queue *alphaRules = initializeQueue(NULL);
-
-		char *eProduction;
-
-        Rule *r = (struct Rule*) e->data;     
-        if (r->l == r->prod[0]) {
-
-			findBeta(grammar, betaRules, e->data, r->prod);
-			newBeta(betaRules, e->data);
-			
-			newAlpha(alphaRules, e->data, r);
-			fprintf(stderr, "APPEND: %s\n", appendToPosition(grammar, alphaRules, m) ? "True" : "False");
-
-			clearQueue(betaRules); // Clear the betaRules
-			clearQueue(alphaRules); // Clear the alphaRules
-
-			eProduction = createString(NCHAR);
-			eProduction[0] = LAMBDA;
-
-			if (!checkE(grammar, m->l)) push(grammar, createRule(m->l, eProduction));
-
-			erase(grammar, m);  // Eliminar match da gramática
-			freeQueue(betaRules);
-			freeQueue(alphaRules);
-
-		}
-        e = e->next;
-    }
-}
-
-void substituteMatches(Queue *grammar, Queue *matches, Number *n) {
-    char *newProduction;     
-    Queue *newRules = initializeQueue(NULL);
-
-    // Para cada match
-    Element *e = matches->begin;
-    while (e != NULL) {
-        Rule *m = e->data;
-
-        // Achar todas as produções de n na gramática
-        Element *t = grammar->begin;
-        while (t != NULL) {
-            Rule *r = t->data;
-            if (r->l == n->value) {
-                newProduction = createString(NCHAR);
-
-                strcpy(newProduction, r->prod);
-                strcat(newProduction, m->prod + 1);
-
-				fprintf(stdout, "           Prod: %s\n", newProduction);
-
-                // Adicionar nova regra na gramatica
-                push(newRules, createRule(m->l, newProduction));
-            }
-
-            t = t->next;
-        }
-
-        // Unite the newRules to the grammar
-        appendToPosition(grammar, newRules, m);
-        clearQueue(newRules); // Clear the newRules
-        
-        erase(grammar, m);  // Eliminar match da gramática
-        e = e->next; 
-    }
-
-    // Free the Queue
-    freeQueue(newRules);
-}
-
 void globalElimination(Queue *grammar, Queue *order) {
     Element *e = order->begin;
     Queue *matches = initializeQueue(NULL); 
@@ -566,11 +585,10 @@ void globalElimination(Queue *grammar, Queue *order) {
             findAllMatches(grammar, matches, e->data, t->data);
             
             if (!isQueueEmpty(matches)) { 
-                printGrammar(stdout, matches);
                 substituteMatches(grammar, matches, t->data);
             }
 
-            imediateElimination(grammar);  
+            imediateElimination(grammar, e->data);
             clearQueue(matches);
             t = t->next;
         }
@@ -603,24 +621,29 @@ int main(int argc, char *argv[]) {
         }
     }
  
-    //Load Grammar
+    // Load Grammar
     g = initializeQueue(freeRule);
     readGrammar(filename, g);
+    
+    fprintf(out, "Original Grammar:\n\n");
     printGrammar(out, g);
 
+    // Create the order and list of available NT
     order = initializeQueue(freeNumber);
+    availableNT = initializeQueue(freeNumber);
+    
     orderNT(g, order);
+    populateAvailableNT(availableNT, order);
+    
     printOrder(out, order);
+
+    fprintf(out, "After removing:\n\n");
 
     globalElimination(g, order);
     printGrammar(out, g);
 
-	//fprintf(stdout, "Terminou tudo, so falta os free\n");
-
     freeQueue(g);
-	//fprintf(stdout, "After free g\n");
     freeQueue(order);
-	//fprintf(stdout, "After free order\n");
 
     return 0;
 }
