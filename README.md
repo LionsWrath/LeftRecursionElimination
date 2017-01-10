@@ -10,7 +10,7 @@ A entrada do programa é um arquivo de texto com uma grámatica para análise, s
   * Todos os símbolos devem ter somente **um** charactere
   * As letras **maiúsculas** representam estados **Não-Terminais**
   * As letras **minúsculas** representam estados **Terminais**
-  * O algoritmo suporta no máximo 26 símbolos como **Não-Terminais** - um para cada letra maiúscula do alfabeto. Lembre que o algoritmo gera novos símbolos Não **Não-Terminais** para a gramática.
+  * O algoritmo suporta no máximo 26 símbolos como **Não-Terminais** - um para cada letra maiúscula do alfabeto. Lembre que o algoritmo gera novos símbolos **Não-Terminais** para a gramática.
   * A letra **S** representa o símbolo de início da gramática
   * A letra **e** represeta nosso "ε"(*epsilon*), portando lembrar de **não** utilizá-la para representar um terminal
   * $ representa nosso símbolo final
