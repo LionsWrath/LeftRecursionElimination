@@ -10,7 +10,8 @@ A entrada do programa é um arquivo de texto com uma grámatica para análise, s
   * Todos os símbolos devem ter somente **um** charactere
   * As letras **maiúsculas** representam estados **Não-Terminais**
   * As letras **minúsculas** representam estados **Terminais**
-  * A letra **e** represeta nosso "ε"(*epsilon*), portando lembrar de **não** utilizá-la para representar um terminal
+  * A letra **S** representa símbolo de início da gramática
+  * A letra **e** represeta nosso "ε"(*epsilon*), portando lembrar de **não** utilizá-la para representar um terminal
   * $ representa nosso símbolo final
   * O símbolo "|" (*pipe*) separa produções
       * Pode-se optar pela não utilização do "pipe", basta escrever a produção em uma linha separada
